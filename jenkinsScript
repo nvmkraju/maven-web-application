@@ -42,7 +42,7 @@ node{
 
 def notifyBuild(String buildStatus = 'STARTED') {
   // build status of null means successful
-  buildStatus =  buildStatus ? 'SUCCESSFUL' : buildStatus
+  //buildStatus =  buildStatus ? 'SUCCESSFUL' : buildStatus
 
   // Default values
   def colorName = 'RED'
