@@ -5,27 +5,63 @@ node{
 	
 	properties([buildDiscarder(logRotator(artifactDaysToKeepStr: '', artifactNumToKeepStr: '', daysToKeepStr: '', numToKeepStr: '3')), pipelineTriggers([pollSCM('* * * * *')])])
 
-	stage('gitTojenkins'){
-		git branch: 'development', credentialsId: 'ea70a4bc-4c74-49f3-b0c8-705037fe7ea1', url: 'https://github.com/nvmkraju/maven-web-application.git'
-	}
-
-	stage('mavenBuild'){
-		sh "${mavenHome}/bin/mvn clean package"
-	}
-
-	stage('sonarReport'){
-		sh "${mavenHome}/bin/mvn clean sonar:sonar"
-	}
-
-	stage('nexusArtifact'){
-		sh "${mavenHome}/bin/mvn clean deploy"
-	}
-
-	stage('tomcatDeploy'){
-		sshagent(['cdb8e047-d937-40a4-afdf-6a4b987bdffa']) {
-			sh "scp -o StrictHostkeyChecking=no target/maven-web-application.war ec2-user@34.238.250.94:/opt/apache-tomcat-9.0.65/webapps/"
+	try {
+		notifyBuild('STARTED')
+		stage('gitTojenkins'){
+			git branch: 'development', credentialsId: 'ea70a4bc-4c74-49f3-b0c8-705037fe7ea1', url: 'https://github.com/nvmkraju/maven-web-application.git'
 		}
 
-	}
+		stage('mavenBuild'){
+			sh "${mavenHome}/bin/mvn clean package"
+		}
 
+		stage('sonarReport'){
+			sh "${mavenHome}/bin/mvn clean sonar:sonar"
+		}
+
+		stage('nexusArtifact'){
+			sh "${mavenHome}/bin/mvn clean deploy"
+		}
+
+		stage('tomcatDeploy'){
+			sshagent(['cdb8e047-d937-40a4-afdf-6a4b987bdffa']) {
+				sh "scp -o StrictHostkeyChecking=no target/maven-web-application.war ec2-user@34.238.250.94:/opt/apache-tomcat-9.0.65/webapps/"
+			}
+		}
+	} 
+	catch(e) {
+		notifyBuild('FAILURE')
+	}
+	finally {
+		notifyBuild('SUCCESS')
+	}
+	
+} //node closing
+
+//function for sending notification to slack
+
+def notifyBuild(String buildStatus = 'STARTED') {
+  // build status of null means successful
+  buildStatus =  buildStatus ? 'SUCCESSFUL' : buildStatus
+
+  // Default values
+  def colorName = 'RED'
+  def colorCode = '#FF0000'
+  def subject = "${buildStatus}: Job '${env.JOB_NAME} [${env.BUILD_NUMBER}]'"
+  def summary = "${subject} (${env.BUILD_URL})"
+
+  // Override default values based on build status
+  if (buildStatus == 'STARTED') {
+    colorName = 'YELLOW'
+    colorCode = '#FFFF00'
+  } else if (buildStatus == 'SUCCESSFUL') {
+    colorName = 'GREEN'
+    colorCode = '#00FF00'
+  } else {
+    colorName = 'RED'
+    colorCode = '#FF0000'
+  }
+
+  // Send notifications
+  slackSend (color: colorCode, message: summary)
 }
